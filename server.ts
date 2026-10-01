@@ -41,10 +41,14 @@ const DRAWER_GRACE_MS = 8000;
 const HINT_THRESHOLDS = [0.5, 0.25];
 const MIN_HIDDEN_LETTERS = 3;
 
-// ---- Scoring ----
-const GUESSER_BASE_POINTS = 50;
-const GUESSER_MAX_TIME_BONUS = 100;
-const DRAWER_POINTS_PER_GUESS = 40;
+// ---- Scoring (skribbl style, max 400 for one guess) ----
+const TIME_MAX = 250;    // points for guessing fast
+const ORDER_MAX = 150;   // points for guessing early in the order
+const MIN_GUESS_POINTS = 20;
+
+// How much of ORDER_MAX each guesser gets (1st, 2nd, 3rd, ...).
+// Big drop from 1st to 2nd, then only small drops.
+const ORDER_FACTORS = [1.0, 0.5, 0.35, 0.28, 0.22, 0.18, 0.15];
 
 // ---- Tomatoes ----
 const EGGS_PER_ROUND = 2;
@@ -107,7 +111,7 @@ const MAX_CUSTOM_WORD_LENGTH = 30;
 // LOBBY CHAT
 // ========================================
 
-const MAX_LOBBY_MESSAGES = 50;
+const MAX_LOBBY_MESSAGES = 150;
 const MAX_LOBBY_MESSAGE_LENGTH = 200;
 const MIN_LOBBY_CHAT_INTERVAL_MS = 400;
 
@@ -747,6 +751,24 @@ function allGuessersDone(
 // ========================================
 // SCORING
 // ========================================
+
+function guessPoints(
+    timeLeft: number,
+    roundTime: number,
+    order: number
+): number {
+    // order: 0 = first correct guesser, 1 = second, ...
+    const ratio = Math.max(0, Math.min(1, timeLeft / roundTime));
+
+    const timePart = TIME_MAX * ratio;
+
+    const factor =
+        ORDER_FACTORS[Math.min(order, ORDER_FACTORS.length - 1)] ?? 0.15;
+
+    const orderPart = ORDER_MAX * factor;
+
+    return Math.max(MIN_GUESS_POINTS, Math.round(timePart + orderPart));
+}
 
 function addPoints(
     room: GameRoom,
@@ -2873,35 +2895,29 @@ io.on(
                         player.id
                     );
 
-                    const timeBonus =
-                        Math.floor(
-                            GUESSER_MAX_TIME_BONUS *
-                            (
-                                room.timeLeft /
-                                room.roundDuration
-                            )
-                        );
+// 0 = first correct guesser, 1 = second, ...
+// (this player was just added to correctGuessers above)
+const order = room.correctGuessers.length - 1;
 
-                    const guesserPoints =
-                        GUESSER_BASE_POINTS +
-                        timeBonus;
+const guesserPoints =
+    guessPoints(room.timeLeft, room.roundDuration, order);
 
-                    addPoints(
-                        room,
-                        player.id,
-                        guesserPoints
-                    );
+addPoints(room, player.id, guesserPoints);
 
-                    const drawerId =
-                        room.currentDrawerId;
+// Drawer gets the average of what the guessers earn:
+// each correct guess adds (its points / number of guessers).
+const drawerId = room.currentDrawerId;
 
-                    if (drawerId) {
-                        addPoints(
-                            room,
-                            drawerId,
-                            DRAWER_POINTS_PER_GUESS
-                        );
-                    }
+if (drawerId) {
+
+    const guesserCount = Math.max(1, room.players.length - 1);
+
+    addPoints(
+        room,
+        drawerId,
+        Math.round(guesserPoints / guesserCount)
+    );
+}
 
                     io.to(room.code).emit(
                         "correct_guess",
