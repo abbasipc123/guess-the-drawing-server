@@ -64,7 +64,7 @@ const MAX_STROKES_PER_ROUND = 3000;
 // WORDS
 // ========================================
 
-const WORDS = [
+const BASE_WORDS = [
     "Cat", "Dog", "House", "Car", "Tree", "Apple", "Sun", "Fish",
     "Airplane", "Pizza", "Bicycle", "Elephant", "Guitar", "Flower",
     "Rocket", "Banana", "Umbrella", "Moon", "Star", "Cloud",
@@ -99,6 +99,66 @@ const WORDS = [
     "Astronaut On Moon"
 ];
 
+const MORE_WORDS = [
+    // ---- Animals ----
+    "Dinosaur", "Zebra", "Owl", "Bat", "Frog", "Squirrel", "Hedgehog",
+    "Dolphin", "Jellyfish", "Scorpion", "Parrot", "Eagle", "Bear", "Panda",
+    "Fox", "Wolf", "Deer", "Donkey", "Sheep", "Chicken", "Camel",
+    "Peacock", "Kangaroo", "Mermaid", "Vampire",
+
+    // ---- Food ----
+    "Cheese", "Egg", "Pineapple", "Cherry", "Lemon", "Orange", "Pear",
+    "Tomato", "Corn", "Mushroom", "Broccoli", "Donut", "Lollipop", "Candy",
+    "Sandwich", "Popcorn", "Mango", "Samosa",
+
+    // ---- Things ----
+    "Lighthouse", "Backpack", "Scarecrow", "Wheelchair", "Skateboard",
+    "Telescope", "Cactus", "Submarine", "Tractor", "Parachute", "Igloo",
+    "Compass", "Hammock", "Trampoline", "Chandelier", "Rickshaw", "Kite",
+    "Minaret", "Football", "Swing", "Anchor", "Fireworks", "Headphones",
+    "Microphone", "Laptop", "Pyramid", "Tent", "Soap", "Bucket", "Broom",
+    "Mirror", "Spoon", "Fork", "Knife", "Cup", "Plate", "Bottle", "Pillow",
+    "Blanket", "Sofa", "Fan", "Fridge", "Television", "Battery", "Magnet",
+    "Wallet", "Envelope", "Pencil", "Ruler", "Eraser", "Paintbrush",
+    "Drum", "Piano", "Violin", "Trumpet", "Flute", "Bell", "Flag", "Map",
+    "Coin", "Diamond", "Trophy", "Medal", "Arrow", "Shield", "Cannon",
+    "Tank", "Ambulance", "Motorcycle", "Scooter", "Taxi", "Tornado",
+
+    // ---- People ----
+    "Doctor", "Astronaut", "Chef", "Farmer", "Cowboy", "Ninja", "Clown",
+
+    // ---- 2-word phrases ----
+    "Cricket Bat", "Truck Art", "Tea Cup", "Pizza Slice", "Ice Cream Truck",
+    "Hot Chocolate", "Fried Egg", "Apple Pie", "French Fries",
+    "Pancake Stack", "Roller Coaster", "Ferris Wheel", "Bumper Cars",
+    "Basketball Hoop", "Soccer Ball", "Boxing Gloves", "Life Jacket",
+    "Scuba Diver", "Sleeping Bag", "Camp Fire", "Bird Cage", "Spider Web",
+    "Honey Bee", "Polar Bear", "Black Hole", "Solar System",
+    "Shooting Star", "Lightning Bolt", "Rain Cloud", "Snow Globe",
+    "Ice Cube", "Garden Hose", "Lawn Mower", "Mail Box", "Street Lamp",
+    "Park Bench", "Wind Mill", "Treasure Map", "Magic Carpet",
+    "Cowboy Hat", "Top Hat", "Party Hat", "Wrist Watch", "Hand Fan",
+    "Ceiling Fan", "Washing Machine", "Vacuum Cleaner", "Remote Control",
+    "Selfie Stick", "Power Bank",
+
+    // ---- 3-word phrases ----
+    "Cat Chasing Mouse", "Boy Flying Kite", "Man Riding Camel",
+    "Rain On Umbrella", "Bird On Branch", "Girl Playing Piano",
+    "Kid On Swing", "Chef Cooking Soup", "Sun Behind Cloud",
+    "Car In Garage", "Boat On Lake", "Dog Chasing Ball",
+    "Frog On Lilypad", "Astronaut In Space", "Man Fishing In Lake"
+];
+
+// Combine both lists, dropping duplicates (case-insensitive).
+// The rest of the server keeps using WORDS, so nothing else changes.
+const WORDS: string[] = Array.from(
+    new Map(
+        [...BASE_WORDS, ...MORE_WORDS].map(
+            w => [w.toLowerCase(), w] as [string, string]
+        )
+    ).values()
+);
+
 // ========================================
 // GAME SETTINGS
 // ========================================
@@ -106,7 +166,7 @@ const WORDS = [
 const MIN_ROUNDS = 1;
 const MAX_ROUNDS = 5;
 
-const MAX_CUSTOM_WORDS = 50;
+const MAX_CUSTOM_WORDS = 300;
 const MAX_CUSTOM_WORD_LENGTH = 30;
 
 // ========================================
