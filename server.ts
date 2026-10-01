@@ -45,6 +45,8 @@ const MIN_HIDDEN_LETTERS = 3;
 const TIME_MAX = 250;    // points for guessing fast
 const ORDER_MAX = 150;   // points for guessing early in the order
 const MIN_GUESS_POINTS = 20;
+// Drawer gets this share of the guessers' average (1.0 = same as guessers).
+const DRAWER_SHARE = 0.6;
 
 // How much of ORDER_MAX each guesser gets (1st, 2nd, 3rd, ...).
 // Big drop from 1st to 2nd, then only small drops.
@@ -2912,11 +2914,11 @@ if (drawerId) {
 
     const guesserCount = Math.max(1, room.players.length - 1);
 
-    addPoints(
-        room,
-        drawerId,
-        Math.round(guesserPoints / guesserCount)
-    );
+addPoints(
+    room,
+    drawerId,
+    Math.round((guesserPoints * DRAWER_SHARE) / guesserCount)
+);
 }
 
                     io.to(room.code).emit(
