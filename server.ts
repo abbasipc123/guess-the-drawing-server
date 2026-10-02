@@ -234,6 +234,7 @@ interface GameRoom {
     wordChoices: string[];
 
     drawerOrder: string[];
+    turnRound: number[];   // which round each turn belongs to    
     currentTurn: number;
     totalTurns: number;
     rounds: number;
@@ -570,6 +571,12 @@ function editDistance(
 function displayRound(
     room: GameRoom
 ): number {
+    const known = room.turnRound[room.currentTurn - 1];
+
+    if (known !== undefined) {
+        return known;
+    }
+
     return Math.min(
         room.rounds,
         Math.max(
@@ -580,6 +587,55 @@ function displayRound(
             )
         )
     );
+}
+
+// A player joins while the game is already running.
+// They draw once at the end of the current round and of every later round.
+function addLatePlayer(
+    room: GameRoom,
+    playerId: string
+) {
+    const currentRound = displayRound(room);
+
+    // Eggs for the rounds that are still left (including this one).
+    const roundsLeft =
+        Math.max(1, room.rounds - currentRound + 1);
+
+    room.eggsLeft[playerId] =
+        roundsLeft * EGGS_PER_ROUND;
+
+    // If this player left earlier, remove their old future turns first.
+    for (
+        let i = room.drawerOrder.length - 1;
+        i >= room.currentTurn;
+        i--
+    ) {
+        if (room.drawerOrder[i] === playerId) {
+            room.drawerOrder.splice(i, 1);
+            room.turnRound.splice(i, 1);
+        }
+    }
+
+    // Going from the last round down keeps the positions correct.
+    for (let r = room.rounds; r >= currentRound; r--) {
+
+        let lastIdx = -1;
+
+        for (let i = 0; i < room.turnRound.length; i++) {
+            if (room.turnRound[i] === r) {
+                lastIdx = i;
+            }
+        }
+
+        if (lastIdx === -1) {
+            continue;
+        }
+
+        room.drawerOrder.splice(lastIdx + 1, 0, playerId);
+        room.turnRound.splice(lastIdx + 1, 0, r);
+    }
+
+    room.totalTurns = room.drawerOrder.length;
 }
 
 // ========================================
@@ -1825,6 +1881,8 @@ io.on(
                     wordChoices: [],
 
                     drawerOrder: [],
+                    
+                    turnRound: [],
 
                     currentTurn: 0,
 
@@ -2074,19 +2132,6 @@ io.on(
                 }
 
                 if (
-                    room.phase !==
-                    "lobby"
-                ) {
-                    callback({
-                        success: false,
-                        message:
-                            "Game already in progress. Wait for it to finish."
-                    });
-
-                    return;
-                }
-
-                if (
                     room.players.length >=
                     MAX_PLAYERS
                 ) {
@@ -2122,6 +2167,57 @@ io.on(
                     playerId
                 ] = 0;
 
+                // NEW (addition 1): joining a game that is already running
+                if (room.phase !== "lobby") {
+                    addLatePlayer(room, playerId);
+                }
+
+                playerRooms.set(
+                    playerId,
+                    roomCode
+                );
+
+                socket.join(
+                    roomCode
+                );
+
+                callback({
+                    success: true,
+                    roomCode:
+                        roomCode,
+                    players:
+                        publicPlayers(
+                            room
+                        ),
+                    playerCount:
+                        room.players
+                            .length,
+                    maxPlayers:
+                        MAX_PLAYERS,
+                    hostId:
+                        room.hostId
+                });
+
+                sendRoomUpdate(
+                    room
+                );
+
+                sendScores(
+                    room
+                );
+
+                // NEW (addition 2): send the late joiner the current game state
+                if (room.phase !== "lobby") {
+                    socket.emit(
+                        "resync",
+                        buildSnapshot(room, player)
+                    );
+                }
+
+                console.log(
+                    `${playerName} joined room ${roomCode}`
+                );
+                
                 playerRooms.set(
                     playerId,
                     roomCode
@@ -2402,6 +2498,7 @@ io.on(
                     rounds;
 
                 room.drawerOrder = [];
+                room.turnRound = [];
 
                 for (
                     let r = 0;
@@ -2410,6 +2507,10 @@ io.on(
                 ) {
                     room.drawerOrder.push(
                         ...order
+                    );
+
+                    order.forEach(() =>
+                        room.turnRound.push(r + 1)
                     );
                 }
 
