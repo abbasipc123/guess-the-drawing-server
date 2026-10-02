@@ -222,6 +222,13 @@ interface LobbyMessage {
     message: string;
 }
 
+interface PlayerStats {
+    likes: number;       // likes my drawings got
+    correct: number;     // my correct guesses
+    guessSecs: number;   // total seconds I needed for those guesses
+    eggsTaken: number;   // eggs thrown at my drawings
+}
+
 interface GameRoom {
     code: string;
     players: Player[];
@@ -264,6 +271,7 @@ interface GameRoom {
     strokes: Stroke[];
 
     scores: Record<string, number>;
+    stats: Record<string, PlayerStats>;
     roundPoints: Record<string, number>;
 
     timeLeft: number;
@@ -1018,6 +1026,101 @@ function buildSnapshot(
 // FINISH GAME
 // ========================================
 
+function statsOf(room: GameRoom, playerId: string): PlayerStats {
+    let s = room.stats[playerId];
+
+    if (!s) {
+        s = { likes: 0, correct: 0, guessSecs: 0, eggsTaken: 0 };
+        room.stats[playerId] = s;
+    }
+
+    return s;
+}
+
+function buildAwards(room: GameRoom) {
+    const awards: {
+        icon: string;
+        title: string;
+        playerId: string;
+        playerName: string;
+        detail: string;
+    }[] = [];
+
+    let artistId = "", artistVal = 0;
+    let fastId = "", fastVal = Infinity;
+    let smartId = "", smartVal = 0;
+    let eggedId = "", eggedVal = 0;
+
+    room.players.forEach(p => {
+        const s = room.stats[p.id];
+
+        if (!s) {
+            return;
+        }
+
+        if (s.likes > artistVal) {
+            artistVal = s.likes;
+            artistId = p.id;
+        }
+
+        if (s.correct > 0) {
+            const avg = s.guessSecs / s.correct;
+
+            if (avg < fastVal) {
+                fastVal = avg;
+                fastId = p.id;
+            }
+        }
+
+        if (s.correct > smartVal) {
+            smartVal = s.correct;
+            smartId = p.id;
+        }
+
+        if (s.eggsTaken > eggedVal) {
+            eggedVal = s.eggsTaken;
+            eggedId = p.id;
+        }
+    });
+
+    const nameOf = (id: string) =>
+        room.players.find(p => p.id === id)?.name ?? "Player";
+
+    if (artistId) {
+        awards.push({
+            icon: "🎨", title: "Best artist",
+            playerId: artistId, playerName: nameOf(artistId),
+            detail: `${artistVal} 👍`
+        });
+    }
+
+    if (fastId) {
+        awards.push({
+            icon: "⚡", title: "Fastest guesser",
+            playerId: fastId, playerName: nameOf(fastId),
+            detail: `${fastVal.toFixed(1)}s avg`
+        });
+    }
+
+    if (smartId) {
+        awards.push({
+            icon: "🧠", title: "Most correct guesses",
+            playerId: smartId, playerName: nameOf(smartId),
+            detail: `${smartVal} guesses`
+        });
+    }
+
+    if (eggedId) {
+        awards.push({
+            icon: "🥚", title: "Most egged",
+            playerId: eggedId, playerName: nameOf(eggedId),
+            detail: `${eggedVal} eggs`
+        });
+    }
+
+    return awards;
+}
+
 function finishGame(
     room: GameRoom
 ) {
@@ -1053,7 +1156,9 @@ function finishGame(
         "game_finished",
         {
             scores:
-                room.scores
+                room.scores,
+            awards:
+                buildAwards(room)
         }
     );
 
@@ -1940,6 +2045,8 @@ io.on(
                     },
 
                     roundPoints: {},
+                    
+                    stats: {},
 
                     timeLeft: 0,
 
@@ -2446,7 +2553,9 @@ io.on(
                 );
 
                 room.scores = {};
-
+              
+                room.stats = {};
+                
                 room.players.forEach(
                     p => {
                         room.scores[
@@ -3062,6 +3171,10 @@ const guesserPoints =
 
 addPoints(room, player.id, guesserPoints);
 
+  const gs = statsOf(room, player.id);
+  gs.correct++;
+  gs.guessSecs += room.roundDuration - room.timeLeft;
+
 // Drawer gets the average of what the guessers earn:
 // each correct guess adds (its points / number of guessers).
 const drawerId = room.currentDrawerId;
@@ -3226,6 +3339,10 @@ addPoints(
                     type
                 );
 
+                  if (type === "like" && room.currentDrawerId) {
+                      statsOf(room, room.currentDrawerId).likes++;
+                  }
+                
                 sendReactions(
                     room
                 );
@@ -3319,6 +3436,10 @@ addPoints(
                     egg
                 );
 
+                  if (room.currentDrawerId) {
+                      statsOf(room, room.currentDrawerId).eggsTaken++;
+                  }
+                
                 io.to(room.code).emit(
                     "egg_thrown",
                     {
