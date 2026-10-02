@@ -2867,6 +2867,12 @@ io.on(
                     return;
                 }
 
+                if (
+                    room.currentDrawerId ===
+                    player.id
+                ) {
+                    return;
+                }
 
                 const now =
                     Date.now();
@@ -2894,9 +2900,7 @@ io.on(
                 if (
                     room.correctGuessers.includes(
                         player.id
-                    ) ||
-                    room.currentDrawerId ===
-                        player.id
+                    )
                 ) {
                     room.players.forEach(
                         p => {
