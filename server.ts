@@ -1803,7 +1803,7 @@ function makeRoom(
         kicked: new Set<string>(),
         eggsLeft: {},
         votes: new Map<string, Vote>(),
-        eggThrown: new Map<string, number>(),
+        eggThrown: new Set<string>(),
         eggs: [],
         strokes: [],
         scores: { [host.id]: 0 },
