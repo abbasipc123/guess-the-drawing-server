@@ -231,6 +231,7 @@ interface PlayerStats {
 
 interface GameRoom {
     code: string;
+    isPublic: boolean;
     players: Player[];
     hostId: string;
 
@@ -359,7 +360,8 @@ function sendRoomUpdate(room: GameRoom) {
         players: publicPlayers(room),
         playerCount: room.players.length,
         maxPlayers: MAX_PLAYERS,
-        hostId: room.hostId
+        hostId: room.hostId,
+        isPublic: room.isPublic
     });
 }
 
@@ -1768,6 +1770,52 @@ function leaveCurrentRoom(
     );
 }
 
+function makeRoom(
+    code: string,
+    host: Player,
+    isPublic: boolean
+): GameRoom {
+    return {
+        code,
+        isPublic,
+        players: [host],
+        hostId: host.id,
+        phase: "lobby",
+        currentDrawerId: null,
+        currentWord: null,
+        wordChoices: [],
+        drawerOrder: [],
+        turnRound: [],
+        currentTurn: 0,
+        totalTurns: 0,
+        rounds: 1,
+        perRound: 0,
+        roundDuration: DEFAULT_ROUND_TIME,
+        wordChoiceCount: DEFAULT_WORD_CHOICES,
+        wordPool: [...WORDS],
+        lobbyChat: [],
+        correctGuessers: [],
+        usedWords: [],
+        wrongGuesses: new Set<string>(),
+        revealedIdx: [],
+        hintsGiven: 0,
+        skipUsed: false,
+        kicked: new Set<string>(),
+        eggsLeft: {},
+        votes: new Map<string, Vote>(),
+        eggThrown: new Map<string, number>(),
+        eggs: [],
+        strokes: [],
+        scores: { [host.id]: 0 },
+        stats: {},
+        roundPoints: {},
+        timeLeft: 0,
+        roundTimer: null,
+        nextRoundTimer: null,
+        choiceTimer: null
+    };
+}
+
 // ========================================
 // HTTP
 // ========================================
@@ -1966,6 +2014,7 @@ io.on(
 
                 const room: GameRoom = {
                     code: roomCode,
+                    isPublic: false,
 
                     players: [
                         player
@@ -2365,6 +2414,150 @@ io.on(
             }
         );
 
+        // ========================================
+        // PLAY (random public room)
+        // ========================================
+
+        socket.on(
+            "play_public",
+            (
+                data: {
+                    playerName?: string;
+                },
+                callback?: (
+                    response: object
+                ) => void
+            ) => {
+
+                if (typeof callback !== "function") {
+                    return;
+                }
+
+                const playerName =
+                    data?.playerName?.trim();
+
+                if (
+                    !playerName ||
+                    playerName.length > 20
+                ) {
+                    callback({
+                        success: false,
+                        message:
+                            "Enter a name between 1 and 20 characters."
+                    });
+
+                    return;
+                }
+
+                leaveCurrentRoom(socket);
+
+                // Best open public room: lobbies first, then the fullest.
+                let target: GameRoom | null = null;
+
+                for (const r of Array.from(rooms.values())) {
+
+                    if (!r.isPublic) continue;
+                    if (r.players.length >= MAX_PLAYERS) continue;
+                    if (!r.players.some(p => p.connected)) continue;
+                    if (r.kicked.has(playerId)) continue;
+
+                    if (
+                        r.players.some(
+                            p =>
+                                p.name.toLowerCase() ===
+                                playerName.toLowerCase()
+                        )
+                    ) {
+                        continue;
+                    }
+
+                    if (target === null) {
+                        target = r;
+                        continue;
+                    }
+
+                    const rLobby = r.phase === "lobby";
+                    const tLobby = target.phase === "lobby";
+
+                    if (
+                        (rLobby && !tLobby) ||
+                        (
+                            rLobby === tLobby &&
+                            r.players.length > target.players.length
+                        )
+                    ) {
+                        target = r;
+                    }
+                }
+
+                const player: Player = {
+                    id: playerId,
+                    name: playerName,
+                    isHost: false,
+                    connected: true,
+                    socketId: socket.id,
+                    graceTimer: null
+                };
+
+                let room: GameRoom;
+
+                if (target !== null) {
+
+                    room = target;
+
+                    room.players.push(player);
+
+                    room.scores[playerId] = 0;
+
+                    // Joining a game that is already running.
+                    if (room.phase !== "lobby") {
+                        addLatePlayer(room, playerId);
+                    }
+
+                } else {
+
+                    player.isHost = true;
+
+                    room = makeRoom(
+                        generateRoomCode(),
+                        player,
+                        true
+                    );
+
+                    rooms.set(room.code, room);
+                }
+
+                playerRooms.set(playerId, room.code);
+
+                socket.join(room.code);
+
+                callback({
+                    success: true,
+                    roomCode: room.code,
+                    players: publicPlayers(room),
+                    playerCount: room.players.length,
+                    maxPlayers: MAX_PLAYERS,
+                    hostId: room.hostId,
+                    isPublic: true
+                });
+
+                sendRoomUpdate(room);
+
+                sendScores(room);
+
+                if (room.phase !== "lobby") {
+                    socket.emit(
+                        "resync",
+                        buildSnapshot(room, player)
+                    );
+                }
+
+                console.log(
+                    `${playerName} joined public room ${room.code}`
+                );
+            }
+        );
+        
         // ========================================
         // START GAME
         // ========================================
@@ -3590,6 +3783,11 @@ addPoints(
                     room.hostId !==
                     player.id
                 ) {
+                    return;
+                }
+
+                // Public rooms: the host role only moves automatically.
+                if (room.isPublic) {
                     return;
                 }
 
