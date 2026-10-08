@@ -304,6 +304,14 @@ function readAvatar(raw: unknown): string {
         : DEFAULT_AVATAR;
 }
 
+const EGG_SKINS = ["egg", "tomato", "pie", "slime"];
+
+function readSkin(raw: unknown): string {
+    return typeof raw === "string" && EGG_SKINS.includes(raw)
+        ? raw
+        : "egg";
+}
+
 // ========================================
 // HELPERS
 // ========================================
@@ -3578,7 +3586,7 @@ addPoints(
 
         socket.on(
             "throw_egg",
-            () => {
+            (data?: { skin?: unknown }) => {
 
                 const ctx =
                     getContext(socket);
@@ -3663,7 +3671,10 @@ addPoints(
                             egg.x,
 
                         y:
-                            egg.y
+                            egg.y,
+
+                        skin:
+                            readSkin(data?.skin)
                     }
                 );
 
