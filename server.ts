@@ -193,7 +193,8 @@ type Vote =
 
 interface Player {
     id: string;
-    name: string;
+     name: string;
+    avatar: string;
     isHost: boolean;
     connected: boolean;
     socketId: string | null;
@@ -290,6 +291,19 @@ const rooms = new Map<string, GameRoom>();
 
 const playerRooms = new Map<string, string>();
 
+const AVATARS = [
+    "🙂","😎","🤠","🥳","🤓","😺","🐶","🐼","🦊","🐸","🐵","🦁",
+    "🐯","🐧","🦄","🐙","🦖","🤖","👻","👽","🎨","🚀","⚽","🍕"
+];
+
+const DEFAULT_AVATAR = "🙂";
+
+function readAvatar(raw: unknown): string {
+    return typeof raw === "string" && AVATARS.includes(raw)
+        ? raw
+        : DEFAULT_AVATAR;
+}
+
 // ========================================
 // HELPERS
 // ========================================
@@ -339,6 +353,7 @@ function publicPlayers(room: GameRoom) {
     return room.players.map(player => ({
         id: player.id,
         name: player.name,
+        avatar: player.avatar,
         isHost: player.isHost,
         connected: player.connected
     }));
@@ -2004,6 +2019,7 @@ io.on(
                 const player: Player = {
                     id: playerId,
                     name: playerName,
+                    avatar: readAvatar((data as { avatar?: unknown } | undefined)?.avatar),
                     isHost: true,
                     connected: true,
                     socketId:
@@ -2307,7 +2323,7 @@ io.on(
                 const player: Player = {
                     id: playerId,
                     name: playerName,
-                    isHost: false,
+                    avatar: readAvatar((data as { avatar?: unknown } | undefined)?.avatar),isHost: false,
                     connected: true,
                     socketId:
                         socket.id,
@@ -2493,6 +2509,7 @@ io.on(
                 const player: Player = {
                     id: playerId,
                     name: playerName,
+                    avatar: readAvatar((data as { avatar?: unknown } | undefined)?.avatar),
                     isHost: false,
                     connected: true,
                     socketId: socket.id,
