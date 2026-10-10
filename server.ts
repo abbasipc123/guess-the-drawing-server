@@ -390,14 +390,7 @@ function sendRoomUpdate(room: GameRoom) {
         playerCount: room.players.length,
         maxPlayers: MAX_PLAYERS,
         hostId: room.hostId,
-                isPublic:
-            room.isPublic,
-
-        tauntsLeft:
-            room.tauntsLeft[player.id] ?? 0,
-
-        tauntSent:
-            room.tauntSent.has(player.id),
+        isPublic: room.isPublic
     });
 }
 
@@ -1054,8 +1047,17 @@ function buildSnapshot(
                 player.id
             ),
 
-        eggs:
+         eggs:
             room.eggs,
+
+        isPublic:
+            room.isPublic,
+
+        tauntsLeft:
+            room.tauntsLeft[player.id] ?? 0,
+
+        tauntSent:
+            room.tauntSent.has(player.id),
 
         canSkip:
             isDrawer &&
@@ -1653,6 +1655,14 @@ function removePlayer(
     delete room.eggsLeft[
         playerId
     ];
+
+    delete room.tauntsLeft[
+        playerId
+    ];
+
+    room.tauntSent.delete(
+        playerId
+    );
 
     playerRooms.delete(
         playerId
@@ -2418,44 +2428,6 @@ io.on(
                         buildSnapshot(room, player)
                     );
                 }
-
-                console.log(
-                    `${playerName} joined room ${roomCode}`
-                );
-                
-                playerRooms.set(
-                    playerId,
-                    roomCode
-                );
-
-                socket.join(
-                    roomCode
-                );
-
-                callback({
-                    success: true,
-                    roomCode:
-                        roomCode,
-                    players:
-                        publicPlayers(
-                            room
-                        ),
-                    playerCount:
-                        room.players
-                            .length,
-                    maxPlayers:
-                        MAX_PLAYERS,
-                    hostId:
-                        room.hostId
-                });
-
-                sendRoomUpdate(
-                    room
-                );
-
-                sendScores(
-                    room
-                );
 
                 console.log(
                     `${playerName} joined room ${roomCode}`
@@ -3733,7 +3705,7 @@ addPoints(
                 );
 
                 console.log(
-                    `${player.name} threw a tomato in room ${room.code}`
+                                   `${player.name} threw ${readSkin(data?.skin)} in room ${room.code}`
                 );
             }
         );
