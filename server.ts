@@ -55,6 +55,10 @@ const ORDER_FACTORS = [1.0, 0.5, 0.35, 0.28, 0.22, 0.18, 0.15];
 // ---- Tomatoes ----
 const EGGS_PER_ROUND = 2;
 
+// ---- Taunts ----
+const TAUNTS_PER_ROUND = 2;
+const TAUNT_COUNT = 12;
+
 // ---- Anti-spam ----
 const MIN_GUESS_INTERVAL_MS = 500;
 const MAX_POINTS_PER_STROKE = 3000;
@@ -268,6 +272,8 @@ interface GameRoom {
     eggsLeft: Record<string, number>;
     votes: Map<string, Vote>;
     eggThrown: Set<string>;
+    tauntsLeft: Record<string, number>;
+    tauntSent: Set<string>;
     eggs: EggPosition[];
 
     strokes: Stroke[];
@@ -384,7 +390,14 @@ function sendRoomUpdate(room: GameRoom) {
         playerCount: room.players.length,
         maxPlayers: MAX_PLAYERS,
         hostId: room.hostId,
-        isPublic: room.isPublic
+                isPublic:
+            room.isPublic,
+
+        tauntsLeft:
+            room.tauntsLeft[player.id] ?? 0,
+
+        tauntSent:
+            room.tauntSent.has(player.id),
     });
 }
 
@@ -636,6 +649,9 @@ function addLatePlayer(
 
     room.eggsLeft[playerId] =
         roundsLeft * EGGS_PER_ROUND;
+
+    room.tauntsLeft[playerId] =
+        roundsLeft * TAUNTS_PER_ROUND;
 
     // If this player left earlier, remove their old future turns first.
     for (
@@ -1278,6 +1294,8 @@ function startRound(
 
     room.roundPoints = {};
 
+    room.tauntSent.clear();
+
     room.votes.clear();
 
     room.eggThrown.clear();
@@ -1827,6 +1845,8 @@ function makeRoom(
         eggsLeft: {},
         votes: new Map<string, Vote>(),
         eggThrown: new Set<string>(),
+        tauntsLeft: {},
+        tauntSent: new Set<string>(),
         eggs: [],
         strokes: [],
         scores: { [host.id]: 0 },
@@ -2106,7 +2126,12 @@ io.on(
                             Vote
                         >(),
 
-                    eggThrown:
+                     eggThrown:
+                        new Set<string>(),
+
+                    tauntsLeft: {},
+
+                    tauntSent:
                         new Set<string>(),
 
                     eggs: [],
@@ -2782,7 +2807,25 @@ io.on(
                     }
                 );
 
-                room.eggsLeft = {};
+                              room.eggsLeft = {};
+
+                room.tauntsLeft = {};
+
+                room.players.forEach(
+                    p => {
+                        room.tauntsLeft[p.id] =
+                            rounds * TAUNTS_PER_ROUND;
+
+                        emitTo(
+                            p,
+                            "taunts_update",
+                            {
+                                tauntsLeft:
+                                    room.tauntsLeft[p.id] ?? 0
+                            }
+                        );
+                    }
+                );
 
                 room.players.forEach(
                     p => {
@@ -3695,6 +3738,73 @@ addPoints(
             }
         );
 
+        // ========================================
+        // TAUNT
+        // ========================================
+
+        socket.on(
+            "send_taunt",
+            (data?: { id?: unknown }) => {
+
+                const ctx = getContext(socket);
+
+                if (!ctx) {
+                    return;
+                }
+
+                const { room, player } = ctx;
+
+                if (
+                    room.phase !== "drawing" ||
+                    room.currentDrawerId === player.id
+                ) {
+                    return;
+                }
+
+                const id = Number(data?.id);
+
+                if (
+                    !Number.isInteger(id) ||
+                    id < 1 ||
+                    id > TAUNT_COUNT
+                ) {
+                    return;
+                }
+
+                if (room.tauntSent.has(player.id)) {
+                    return;
+                }
+
+                const left = room.tauntsLeft[player.id] ?? 0;
+
+                if (left <= 0) {
+                    return;
+                }
+
+                room.tauntSent.add(player.id);
+
+                room.tauntsLeft[player.id] = left - 1;
+
+                io.to(room.code).emit(
+                    "taunt_played",
+                    {
+                        playerId: player.id,
+                        playerName: player.name,
+                        id
+                    }
+                );
+
+                emitTo(
+                    player,
+                    "taunts_update",
+                    {
+                        tauntsLeft:
+                            room.tauntsLeft[player.id] ?? 0
+                    }
+                );
+            }
+        );
+        
         // ========================================
         // KICK PLAYER
         // ========================================
