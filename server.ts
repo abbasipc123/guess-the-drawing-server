@@ -305,18 +305,34 @@ const rooms = new Map<string, GameRoom>();
 
 const playerRooms = new Map<string, string>();
 
-const AVATARS = [
-    "🙂","😎","🤠","🥳","🤓","😺","🐶","🐼","🦊","🐸","🐵","🦁",
-    "🐯","🐧","🦄","🐙","🦖","🤖","👻","👽","🎨","🚀","⚽","🍕"
-];
 
 const DEFAULT_AVATAR = "🙂";
 
 function readAvatar(raw: unknown): string {
-    return typeof raw === "string" && AVATARS.includes(raw)
-        ? raw
-        : DEFAULT_AVATAR;
+    if (typeof raw !== "string") {
+        return DEFAULT_AVATAR;
+    }
+
+    const avatar = raw.trim();
+
+    // Keep avatars short and reject control characters.
+    if (
+        avatar.length === 0 ||
+        avatar.length > 32 ||
+        Array.from(avatar).length > 8 ||
+        /[\u0000-\u001F\u007F]/.test(avatar)
+    ) {
+        return DEFAULT_AVATAR;
+    }
+
+    // Require at least one emoji or regional indicator (flag).
+    if (!/[\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(avatar)) {
+        return DEFAULT_AVATAR;
+    }
+
+    return avatar;
 }
+
 
 const EGG_SKINS = ["egg", "tomato", "pie", "slime"];
 
