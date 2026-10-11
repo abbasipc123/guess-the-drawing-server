@@ -57,7 +57,14 @@ const EGGS_PER_ROUND = 2;
 
 // ---- Taunts ----
 const TAUNTS_PER_ROUND = 2;
-const TAUNT_COUNT = 12;
+
+// How long each taunt locks the room (ms), in clip-number order.
+// Set each value to the real length of that clip.
+const TAUNT_DURATIONS_MS = [
+    3000, 3000, 3000, 3000, 3000, 3000, 3000, 3000, 3000
+];
+
+const TAUNT_COUNT = TAUNT_DURATIONS_MS.length;
 
 // ---- Anti-spam ----
 const MIN_GUESS_INTERVAL_MS = 500;
@@ -274,6 +281,7 @@ interface GameRoom {
     eggThrown: Set<string>;
     tauntsLeft: Record<string, number>;
     tauntSent: Set<string>;
+    tauntBusyUntil: number;
     eggs: EggPosition[];
 
     strokes: Stroke[];
@@ -1298,6 +1306,8 @@ function startRound(
 
     room.tauntSent.clear();
 
+    room.tauntBusyUntil = 0;
+
     room.votes.clear();
 
     room.eggThrown.clear();
@@ -1857,6 +1867,7 @@ function makeRoom(
         eggThrown: new Set<string>(),
         tauntsLeft: {},
         tauntSent: new Set<string>(),
+        tauntBusyUntil: 0,
         eggs: [],
         strokes: [],
         scores: { [host.id]: 0 },
@@ -2143,6 +2154,8 @@ io.on(
 
                     tauntSent:
                         new Set<string>(),
+
+                    tauntBusyUntil: 0,
 
                     eggs: [],
 
@@ -3714,7 +3727,7 @@ addPoints(
         // TAUNT
         // ========================================
 
-        socket.on(
+                socket.on(
             "send_taunt",
             (data?: { id?: unknown }) => {
 
@@ -3753,6 +3766,27 @@ addPoints(
                     return;
                 }
 
+                // Another taunt is still playing: refuse, keep the allowance,
+                // and tell this phone the real numbers.
+                if (Date.now() < room.tauntBusyUntil) {
+
+                    emitTo(
+                        player,
+                        "taunts_update",
+                        {
+                            tauntsLeft: left,
+                            tauntSent: false
+                        }
+                    );
+
+                    return;
+                }
+
+                const durationMs =
+                    TAUNT_DURATIONS_MS[id - 1] ?? 3000;
+
+                room.tauntBusyUntil = Date.now() + durationMs;
+
                 room.tauntSent.add(player.id);
 
                 room.tauntsLeft[player.id] = left - 1;
@@ -3762,7 +3796,8 @@ addPoints(
                     {
                         playerId: player.id,
                         playerName: player.name,
-                        id
+                        id,
+                        durationMs
                     }
                 );
 
@@ -3771,7 +3806,8 @@ addPoints(
                     "taunts_update",
                     {
                         tauntsLeft:
-                            room.tauntsLeft[player.id] ?? 0
+                            room.tauntsLeft[player.id] ?? 0,
+                        tauntSent: true
                     }
                 );
             }
