@@ -282,6 +282,7 @@ interface GameRoom {
     tauntsLeft: Record<string, number>;
     tauntSent: Set<string>;
     tauntBusyUntil: number;
+    wins: Record<string, number>;   // games won in this room (session wins)
     eggs: EggPosition[];
 
     strokes: Stroke[];
@@ -393,7 +394,8 @@ function publicPlayers(room: GameRoom) {
         name: player.name,
         avatar: player.avatar,
         isHost: player.isHost,
-        connected: player.connected
+        connected: player.connected,
+        wins: room.wins[player.id] ?? 0
     }));
 }
 
@@ -1219,6 +1221,22 @@ function finishGame(
 
     room.timeLeft = 0;
 
+    // Session wins: whoever has the top score wins this game (a tie is a win for all).
+    if (room.players.length >= 2) {
+        const top = Math.max(
+            0,
+            ...room.players.map(p => room.scores[p.id] ?? 0)
+        );
+
+        if (top > 0) {
+            room.players.forEach(p => {
+                if ((room.scores[p.id] ?? 0) === top) {
+                    room.wins[p.id] = (room.wins[p.id] ?? 0) + 1;
+                }
+            });
+        }
+    }
+
     io.to(room.code).emit(
         "game_finished",
         {
@@ -1228,6 +1246,9 @@ function finishGame(
                 buildAwards(room)
         }
     );
+
+    // Lobby list shows the new win counts.
+    sendRoomUpdate(room);
 
     console.log(
         `Game finished in room ${room.code}`
@@ -1686,6 +1707,10 @@ function removePlayer(
         playerId
     ];
 
+    delete room.wins[
+        playerId
+    ];
+    
     room.tauntSent.delete(
         playerId
     );
@@ -1884,6 +1909,7 @@ function makeRoom(
         tauntsLeft: {},
         tauntSent: new Set<string>(),
         tauntBusyUntil: 0,
+        wins: {},
         eggs: [],
         strokes: [],
         scores: { [host.id]: 0 },
@@ -2172,6 +2198,8 @@ io.on(
                         new Set<string>(),
 
                     tauntBusyUntil: 0,
+
+                    wins: {},
 
                     eggs: [],
 
